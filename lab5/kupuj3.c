@@ -1,0 +1,75 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+double RATINGS[40];
+int NRATINGS[40];
+int suma;
+double cpuUsedTime;
+
+int main() {
+    int N_ROUNDS = 1000000;
+    int N_GOODS = 40;
+    int a ,b;
+    int CUSTOMERS = 20;
+    int ChildPid[CUSTOMERS];
+    int wpid;
+    int status = 0;
+    for ( int k = 0; k <N_GOODS;k++){NRATINGS[k] =0; RATINGS[k] =0;};
+   int shmid = shmget(2211,(sizeof(RATINGS) + sizeof(NRATINGS)), IPC_CREAT|0666);
+
+//clock_t startZerowanie = clock();
+   double *buf;
+   buf = (double *)shmat(shmid,0,0);
+   for (int g = 0; g<=N_GOODS*2;g++)
+   {
+      buf[g] = 0;
+   }
+
+//clock_t stopZerowanie = clock();
+//float czasZerowanie = (float)(stopZerowanie - startZerowanie) / CLOCKS_PER_SEC;
+//printf("Czas zerowania: %f\n", czasZerowanie);
+//clock_t startKupowanie
+
+
+    for ( int h = 0; h < CUSTOMERS;h++){
+        if(fork() == 0)
+        {
+//	clock_t startKupowanie = clock();
+            for (int j = 0; j < N_ROUNDS; j++) {
+            srand(time(NULL)+j);
+		    b = rand() % N_GOODS;
+            NRATINGS[b] += 1;
+		    a = rand() % 11;
+		    RATINGS[b] = (((NRATINGS[b]-1)* RATINGS[b] + a)/NRATINGS[b]);
+            buf[b] += 1;
+            buf[b+N_GOODS] = RATINGS[b];
+            }
+	exit(1);
+        }
+    }
+    for (int i=0;i<=CUSTOMERS;i++)
+    {
+     wait(NULL);
+    }
+//clock_t stopKupowanie = clock();
+//float czasKupowanie = (stopKupowanie - startKupowanie) / CLOCKS_PER_SEC;
+//printf("Czas kupowania: %f\n", czasKupowanie);
+
+//clock_t startOcenianie = clock();
+    for (int k = 0; k < N_GOODS; k++) {
+    printf("RATING %d [%lf] NRATINGS %d [%lf]\n",k, buf[k+N_GOODS],k ,buf[k]);
+    suma += buf[k];
+    }
+//clock_t stopOcenianie = clock();
+//float czasOcenianie = (stopOcenianie - startOcenianie) / CLOCKS_PER_SEC;
+//printf("Czas oceniania: %f\n", czasOcenianie);
+
+    printf("suma %d\n",suma);
+return 0;
+}

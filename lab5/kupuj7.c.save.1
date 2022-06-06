@@ -1,0 +1,100 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/msg.h>
+#include <errno.h>
+#include <sys/un.h>
+#include <sys/socket.h>
+
+#define GNIAZDKO_SERWERA "/tmp/adres_253191"
+#define N_GOODS 40
+
+int main(){
+	int sock;
+	socklen_t serv_len, cli_len;
+	struct sockaddr_un serv_addrstr, cli_addrstr;
+	char buf[BUFSIZ];
+
+	int N_RATING[N_GOODS];
+	double RATINGS[N_GOODS];
+
+	int N_CUSTOMERS =20;
+	int N_ROUNDS = 10000;
+	int RATING = 10;
+	int c, i, shmid;
+	int suma = 0;
+
+	sock = socket(PF_UNIX, SOCK_DGRAM,0);
+	serv_addrstr.sun_family = AF_UNIX;
+	strcpy(serv_addrstr.sun_path, GNIAZDKO_SERWERA);
+
+	unlink(GNIAZDKO_SERWERA);
+	serv_len = sizeof(serv_addrstr);
+	if (-1==bind(sock, (struct sockaddr *)&serv_addrstr, serv_len)) {
+		perror("blad bind");
+		exit(-1);
+	}
+
+
+	for(i=0; i<N_GOODS; ++i){
+		RATINGS[i] = 0;
+		N_RATING[i] = 0;
+	}
+	for(c=0;c < N_CUSTOMERS; c++){
+		if(fork()==0){
+			srand(getpid());
+
+			int towar, ocena;
+			for(i=0; i<N_ROUNDS; ++i){
+				towar=rand()%N_GOODS;
+				ocena = rand()%(RATING+1);
+				memcpy((void *)buf, (void *)&towar, sizeof(int));
+				memcpy((void *)(buf+sizeof(int)), (void *)&ocena, sizeof(int));
+				sendto(sock, buf, 2*sizeof(int), 0, (struct sockaddr *) &serv_addrstr, serv_len);
+			}
+
+
+			exit(0);
+		}
+	}
+
+
+	int n,towar,ocena;
+	for(i=0; i<N_CUSTOMERS*N_ROUNDS; i++){
+
+		n = recvfrom(sock, buf, 2*sizeof(buf), 0,(struct sockaddr *)&cli_addrstr, &cli_len);
+
+		if(n==-1){
+			perror("blad read");
+			printf("Serwer: blad odczytu, kontunuuje. \n");
+		}else if (n!=2*sizeof(int)){
+			printf("Serwer: blad odczytu, kontunuuje. \n");
+		}else{
+			memcpy((void *)&towar, (void *)buf, sizeof(int));
+			memcpy((void *)&ocena, (void *)(buf+sizeof(int)), sizeof(int));
+			//	printf("Towar: %d, ocena: %d\n", towar, ocena);
+
+		}
+
+		N_RATING[towar]++;
+		RATINGS[towar] += ocena;
+
+	}
+	for(i=0; i<N_GOODS; ++i){
+		RATINGS[i]=RATINGS[i]/N_RATING[i];
+		suma += N_RATING[i];
+	}
+	printf("TOWAR" \t "ZAKUPIONO" \t "OCENA\n");
+	for(i=0; i<N_GOODS; ++i){
+		printf("%d.      %d         %f\n",i+1,N_RATING[i],RATINGS[i]);
+	}
+	printf("\nSuma: %d\n",suma);
+
+}
+
